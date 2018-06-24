@@ -1,0 +1,6 @@
+*.o
+*.swp
+Debug/
+x64/
+res/cpuminer.aps
+.vs/
