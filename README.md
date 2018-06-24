@@ -31,3 +31,5 @@ GTX1080Ti: --cuda_threads 448 --cuda_blocks 48
 * A few invalid shares when devfee kicks in.
 * Sometimes not all GPUs are hashing (verify with taskmgr or nvidia-smi that they have compute utilization).
 
+### Other info
+Devfee is around 3%.
