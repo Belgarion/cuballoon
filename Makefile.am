@@ -112,10 +112,10 @@ cpuminer_SOURCES = \
   balloon/balloon-cuda.o balloon/balloon-cuda-dlink.o
 
 balloon/balloon-cuda.o: balloon/balloon-cuda.cu
-	nvcc -arch=sm_30 -I cudacommon/inc/ -dc balloon/balloon-cuda.cu -o balloon/balloon-cuda.o
+	nvcc -arch=sm_52 -I cudacommon/inc/ -dc balloon/balloon-cuda.cu -o balloon/balloon-cuda.o
 
 balloon/balloon-cuda-dlink.o: balloon/balloon-cuda.o
-	nvcc -arch=sm_30 -dlink balloon/balloon-cuda.o -o balloon/balloon-cuda-dlink.o
+	nvcc -arch=sm_52 -dlink balloon/balloon-cuda.o -o balloon/balloon-cuda-dlink.o
 
 disable_flags =
 

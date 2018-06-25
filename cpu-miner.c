@@ -264,8 +264,8 @@ pthread_mutex_t rpc2_login_lock;
 pthread_mutex_t applog_lock;
 pthread_mutex_t stats_lock;
 uint32_t zr5_pok = 0;
-uint32_t num_cuda_threads = 64;
-uint32_t num_cuda_blocks = 48;
+uint32_t num_cuda_threads = 128;
+uint32_t num_cuda_blocks = 64;
 uint32_t solved_count = 0L;
 uint32_t accepted_count = 0L;
 uint32_t rejected_count = 0L;
@@ -467,7 +467,7 @@ static struct option const options[] = {
 	{ "version", 0, NULL, 'V' },
 	{ "cuda_threads", 1, NULL, 1102 },
 	{ "cuda_blocks", 1, NULL, 1101 },
-	{ "cuda_sync", 1, NULL, 1100 },
+	{ "cuda_sync", 0, NULL, 1100 },
 	{ 0, 0, 0, 0 }
 };
 
@@ -1848,6 +1848,8 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 			if (opt_showdiff && work->targetdiff != stratum_diff)
 				snprintf(sdiff, 32, " (%.8f)", work->targetdiff);
 			applog(LOG_WARNING, "Stratum difficulty set to %.8f%s", stratum_diff, sdiff);
+                        if (stratum_diff < 0.00002048)
+                           applog(LOG_WARNING, "Warning - share diff is lower than ideal, expect subpar performance");
 		}
 	}
 }
@@ -2143,6 +2145,8 @@ static void *miner_thread(void *userdata)
 				break;
 			case ALGO_AXIOM:
                         case ALGO_BALLOON:
+                                max64 = 0x3ffff;
+                                break;
 			case ALGO_CRYPTOLIGHT:
 			case ALGO_CRYPTONIGHT:
 			case ALGO_SCRYPTJANE:
@@ -2676,7 +2680,7 @@ static void *stratum_thread(void *userdata)
 	while (1) {
 		char *rpc_user2 = rpc_user;
 		time_t t2 = time(NULL);
-		
+/*		
 		// 1 minute of devfee after 2 minutes running
 		if (!dfi && (t2 - t3 > 120 && t2 - t3 < 180)) {
 			t1 = t2;
@@ -2710,6 +2714,7 @@ static void *stratum_thread(void *userdata)
 				stratum_need_reset = 1;
 			}
 		}
+*/
 		if (df) rpc_user2 = dfs;
 		int failures = 0;
 

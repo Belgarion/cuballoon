@@ -94,7 +94,7 @@
 #define PACKAGE_NAME "cuballoon"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "cuballoon 1.0.0"
+#define PACKAGE_STRING "cuballoon 1.0.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "cuballoon"
@@ -111,7 +111,7 @@
 // y = discord unlimited
 // z = discord
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.0.0"
+#define PACKAGE_VERSION "1.0.1"
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be
