@@ -467,7 +467,7 @@ static struct option const options[] = {
 	{ "version", 0, NULL, 'V' },
 	{ "cuda_threads", 1, NULL, 1102 },
 	{ "cuda_blocks", 1, NULL, 1101 },
-	{ "cuda_sync", 0, NULL, 1100 },
+	{ "cuda_sync", 1, NULL, 1100 },
 	{ 0, 0, 0, 0 }
 };
 
