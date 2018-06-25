@@ -139,7 +139,7 @@ if HAVE_WINDOWS
 endif
 
 cpuminer_LDFLAGS	= @LDFLAGS@
-cpuminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ balloon/balloon-cuda.o balloon/balloon-cuda-dlink.o -L/usr/local/cuda-9.2/targets/x86_64-linux/lib -lcudart
+cpuminer_LDADD	= @LIBCURL@ @JANSSON_LIBS@ @PTHREAD_LIBS@ @WS2_LIBS@ balloon/balloon-cuda.o balloon/balloon-cuda-dlink.o -L/usr/local/cuda/lib64 -lcudart -lcrypto -lssl -lcurl
 cpuminer_CPPFLAGS = @LIBCURL_CPPFLAGS@ $(ALL_INCLUDES)
 cpuminer_CFLAGS   = -Wno-pointer-sign -Wno-pointer-to-int-cast $(disable_flags)
 EXTRA_cpuminer_DEPENDENCIES = balloon/balloon-cuda.o balloon/balloon-cuda-dlink.o
