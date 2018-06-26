@@ -11,6 +11,7 @@
 #include "../sha256-sse/sha256.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define PREBUF_LEN 409600
 
 #ifdef __cplusplus
 extern "C"{
@@ -20,6 +21,7 @@ static const uint32_t __sha256_init[] = {
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 };
+
 
 
 
@@ -58,12 +60,12 @@ void balloon (unsigned char *input, unsigned char *output, int32_t len, int64_t 
   double state_mix = (double)(tv5.tv_usec - tv4.tv_usec) / 1000000 + (double)(tv5.tv_sec - tv4.tv_sec);
   double state_extract = (double)(tv6.tv_usec - tv5.tv_usec) / 1000000 + (double)(tv6.tv_sec - tv5.tv_sec);
   static int printcnt = 0;
-  printcnt++;
-  if (printcnt >= 15) {
-	  printf("Balloon timing: init: %.8f, state_init: %.8f, state_fill: %.8f, state_mix: %.8f, state_extract: %.8f\n",
+  /*printcnt++;
+  if (printcnt >= 150) {
+	  printf("CPU Balloon timing: init: %.8f, state_init: %.8f, state_fill: %.8f, state_mix: %.8f, state_extract: %.8f\n",
 			  init, state_init, state_fill, state_mix, state_extract);
 	  printcnt = 0;
-  }
+  }*/
 }
 
 static inline int bitstream_init (struct bitstream *b) {
@@ -281,8 +283,7 @@ static void sha256_168byte(uint8_t *data, uint8_t *outhash) {
 	// k = 3*512 - 65 - l = 1536 - 65 - 1344 = 127 bits of padding => 15.875 bytes 	
 
 	//__attribute__((aligned(16)))
-	static __sha256_block_t block[3];
-	static int block_inited = 0;
+	__sha256_block_t block[3];
 	uint8_t *ptr = (uint8_t*)block;
 	// 168 bytes of data
 	memcpy(ptr, data, 168);
@@ -299,30 +300,26 @@ static void sha256_168byte(uint8_t *data, uint8_t *outhash) {
 	printf("\n");
 #endif
 
-	if (!block_inited) {
-		*ptr++ = 0x80; // End of string marker (and 7 bits padding)
-		// Pad to (k+l+1 = 448 mod 512)
-		// l = 168*8 = 1344bits
-		// Blocks: 512bit | 512bit | 512bit
-		// (512*3-65-l) = 1536-65-l = 1471 - l = 1471-1344 = 127bit = 15.875 bytes
-		/*for (int i = 0; i < 15; i++) {
-			*ptr++ = 0;
-		}*/
-		memset(ptr, 0, 15);
-		ptr += 15;
-		// 8 bytes is length (in bits)
-		// 1344bit = 0x540
-		*ptr++ = 0x0;
+	*ptr++ = 0x80; // End of string marker (and 7 bits padding)
+	// Pad to (k+l+1 = 448 mod 512)
+	// l = 168*8 = 1344bits
+	// Blocks: 512bit | 512bit | 512bit
+	// (512*3-65-l) = 1536-65-l = 1471 - l = 1471-1344 = 127bit = 15.875 bytes
+	/*for (int i = 0; i < 15; i++) {
 		*ptr++ = 0;
-		*ptr++ = 0;
-		*ptr++ = 0;
-		*ptr++ = 0;
-		*ptr++ = 0;
-		*ptr++ = 0x5;
-		*ptr++ = 0x40;
-
-		block_inited = 1;
-	}
+	}*/
+	memset(ptr, 0, 15);
+	ptr += 15;
+	// 8 bytes is length (in bits)
+	// 1344bit = 0x540
+	*ptr++ = 0x0;
+	*ptr++ = 0;
+	*ptr++ = 0;
+	*ptr++ = 0;
+	*ptr++ = 0;
+	*ptr++ = 0;
+	*ptr++ = 0x5;
+	*ptr++ = 0x40;
 
 	__sha256_hash_t ohash;
 	memcpy(ohash, __sha256_init, 32);
@@ -359,40 +356,55 @@ static void sha256_168byte(uint8_t *data, uint8_t *outhash) {
 uint8_t prebuf[409600];
 uint64_t prebuf_le[409600 / 8];
 uint8_t prebuf_filled = 0;
-void hash_state_mix (struct hash_state *s, int32_t mixrounds) {
+
+void fill_prebuf(struct hash_state *s) {
 	if (!prebuf_filled) {
-		bitstream_fill_buffer (&s->bstream, prebuf, 409600);
+		bitstream_fill_buffer(&s->bstream, prebuf, 409600);
 		prebuf_filled = 1;
 		uint8_t *buf = prebuf;
 		uint64_t *lebuf = prebuf_le;
-		for (int i = 0; i < 409600; i+=8) {
-			bytes_to_littleend8_uint64(buf, lebuf);
+		for (int i = 0; i < PREBUF_LEN; i += 8) {
+			//bytes_to_littleend8_uint64(buf, lebuf);
+			*lebuf <<= 8; *lebuf |= *(buf + 7);
+			*lebuf <<= 8; *lebuf |= *(buf + 6);
+			*lebuf <<= 8; *lebuf |= *(buf + 5);
+			*lebuf <<= 8; *lebuf |= *(buf + 4);
+			*lebuf <<= 8; *lebuf |= *(buf + 3);
+			*lebuf <<= 8; *lebuf |= *(buf + 2);
+			*lebuf <<= 8; *lebuf |= *(buf + 1);
+			*lebuf <<= 8; *lebuf |= *(buf + 0);
 			*lebuf %= 4096;
+			*lebuf <<= 5;
 			lebuf++;
 			buf += 8;
 		}
 	}
+}
+
+
+void hash_state_mix (struct hash_state *s, int32_t mixrounds) {
+	fill_prebuf(s);
 	uint64_t *buf = prebuf_le;
 	uint8_t *sbuf = s->buffer;
 
 	uint64_t neighbor;
 	int32_t n_blocks = s->n_blocks;
 	uint8_t *last_block = (sbuf + (BLOCK_SIZE*(n_blocks-1)));
+	const uint8_t *blocks[5];
+	uint8_t **block = (uint8_t**)blocks;
+	unsigned char data[8 + BLOCK_SIZE * 5];
+	unsigned char *db1 = data + 8;
+	unsigned char *db2 = data + 40;
+	unsigned char *db3 = data + 72;
+	unsigned char *db4 = data + 104;
+	unsigned char *db5 = data + 136;
 	for (int32_t rounds=0; rounds < mixrounds; rounds++) {
-		static const uint8_t *blocks[5];
-		uint8_t **block = (uint8_t**)blocks;
-		static unsigned char data[8 + BLOCK_SIZE*5];
-		static unsigned char *db1 = data+8;
-		static unsigned char *db2 = data+40;
-		static unsigned char *db3 = data+72;
-		static unsigned char *db4 = data+104;
-		static unsigned char *db5 = data+136;
 		{ // i = 0
 			blocks[0] = last_block;
 			blocks[1] = sbuf;
-			blocks[2] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[3] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[4] = (sbuf + (BLOCK_SIZE * (*(buf++))));
+			blocks[2] = (sbuf + ((*(buf++))));
+			blocks[3] = (sbuf + ((*(buf++))));
+			blocks[4] = (sbuf + ((*(buf++))));
 
 			// New sha256
 			//block = (uint8_t**)blocks;
@@ -408,9 +420,9 @@ void hash_state_mix (struct hash_state *s, int32_t mixrounds) {
 		for (size_t i = 1; i < n_blocks; i++) {
 			blocks[0] = blocks[1];
 			blocks[1] += BLOCK_SIZE;
-			blocks[2] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[3] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[4] = (sbuf + (BLOCK_SIZE * (*(buf++))));
+			blocks[2] = (sbuf + ((*(buf++))));
+			blocks[3] = (sbuf + ((*(buf++))));
+			blocks[4] = (sbuf + ((*(buf++))));
 
 			// New sha256
 			block = (uint8_t**)blocks;
@@ -491,28 +503,13 @@ void balloon_openssl(unsigned char *input, unsigned char *output, int32_t len, i
   double state_mix = (double)(tv5.tv_usec - tv4.tv_usec) / 1000000 + (double)(tv5.tv_sec - tv4.tv_sec);
   double state_extract = (double)(tv6.tv_usec - tv5.tv_usec) / 1000000 + (double)(tv6.tv_sec - tv5.tv_sec);
   static int printcnt = 0;
-  printf("OPenSSL timing: init: %.8f, state_init: %.8f, state_fill: %.8f, state_mix: %.8f, state_extract: %.8f\n",
-		  init, state_init, state_fill, state_mix, state_extract);
+  /*printf("OPenSSL timing: init: %.8f, state_init: %.8f, state_fill: %.8f, state_mix: %.8f, state_extract: %.8f\n",
+		  init, state_init, state_fill, state_mix, state_extract);*/
 }
 
 
 void hash_state_mix_orig(struct hash_state *s, int32_t mixrounds) {
-	if (!prebuf_filled) {
-		bitstream_fill_buffer (&s->bstream, prebuf, 409600);
-		prebuf_filled = 1;
-		/*printf("buf: ");
-		for (int i = 0; i < 8; i++) {
-			printf("%x ", prebuf[i]);
-		}
-		printf("\n");*/
-		uint8_t *buf = prebuf;
-		uint64_t *lebuf = prebuf_le;
-		for (int i = 0; i < 409600; i+=8) {
-			bytes_to_littleend8_uint64(buf, lebuf++);
-			buf += 8;
-		}
-		//printf("lebuf: %lx\n", prebuf_le[2]);
-	}
+	fill_prebuf(s);
 	uint64_t *buf = prebuf_le;
 	uint64_t neighbor;
 	int32_t n_blocks = s->n_blocks;
@@ -527,9 +524,9 @@ void hash_state_mix_orig(struct hash_state *s, int32_t mixrounds) {
 			const uint8_t *blocks[5];
 			*(blocks + 0) = i ? cur_block - BLOCK_SIZE : block_last (s);
 			*(blocks + 1) = cur_block;
-			*(blocks + 2) = (s->buffer + (BLOCK_SIZE * (*(buf++) % n_blocks)));
-			*(blocks + 3) = (s->buffer + (BLOCK_SIZE * (*(buf++) % n_blocks)));
-			*(blocks + 4) = (s->buffer + (BLOCK_SIZE * (*(buf++) % n_blocks)));
+			*(blocks + 2) = (s->buffer + ((*(buf++))));
+			*(blocks + 3) = (s->buffer + ((*(buf++))));
+			*(blocks + 4) = (s->buffer + ((*(buf++))));
 			compress (&s->counter, cur_block, blocks, 5);
 		}
 #ifdef TIMED
@@ -541,23 +538,10 @@ void hash_state_mix_orig(struct hash_state *s, int32_t mixrounds) {
 	}
 }
 
+
+
 void hash_state_mix_openssl(struct hash_state *s, int32_t mixrounds) {
-	if (!prebuf_filled) {
-		bitstream_fill_buffer (&s->bstream, prebuf, 409600);
-		prebuf_filled = 1;
-		printf("buf: ");
-		for (int i = 0; i < 8; i++) {
-			printf("%x ", prebuf[i]);
-		}
-		printf("\n");
-		uint8_t *buf = prebuf;
-		uint64_t *lebuf = prebuf_le;
-		for (int i = 0; i < 409600; i+=8) {
-			bytes_to_littleend8_uint64(buf, lebuf++);
-			buf += 8;
-		}
-		printf("lebuf: %lx\n", prebuf_le[2]);
-	}
+	fill_prebuf(s);
 	uint64_t *buf = prebuf_le;
 	uint8_t *sbuf = s->buffer;
 	uint64_t neighbor;
@@ -565,13 +549,12 @@ void hash_state_mix_openssl(struct hash_state *s, int32_t mixrounds) {
 	//printf("n_blocks: %d\n", n_blocks);
 	uint8_t *last_block = (sbuf + (BLOCK_SIZE*(n_blocks-1)));
 	unsigned char data[8 + BLOCK_SIZE*5];
-	const unsigned char *db1 = data+8;
-	const unsigned char *db2 = data+40;
-	const unsigned char *db3 = data+72;
-	const unsigned char *db4 = data+104;
-	const unsigned char *db5 = data+136;
-	const uint8_t *blocks[5];
-	uint8_t **block = (uint8_t**)blocks;
+	unsigned char *db1 = data+8;
+	unsigned char *db2 = data+40;
+	unsigned char *db3 = data+72;
+	unsigned char *db4 = data+104;
+	unsigned char *db5 = data+136;
+	uint8_t *blocks[5];
 	for (int32_t rounds=0; rounds < mixrounds; rounds++) {
 #ifdef TIMED
 		struct timeval tv1, tv2;
@@ -580,42 +563,18 @@ void hash_state_mix_openssl(struct hash_state *s, int32_t mixrounds) {
 		{ // i = 0
 			blocks[0] = last_block;
 			blocks[1] = sbuf;
-			blocks[2] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[3] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[4] = (sbuf + (BLOCK_SIZE * (*(buf++))));
+			blocks[2] = (sbuf + ((*(buf++))));
+			blocks[3] = (sbuf + ((*(buf++))));
+			blocks[4] = (sbuf + ((*(buf++))));
 
-			// New sha256
-			//block = (uint8_t**)blocks;
-#if 0
-			memcpy(data, &s->counter, 8);
-			memcpy(db1, blocks[0], BLOCK_SIZE);
-			memcpy(db2, blocks[1], BLOCK_SIZE);
-			memcpy(db3, blocks[2], BLOCK_SIZE);
-			memcpy(db4, blocks[3], BLOCK_SIZE);
-			memcpy(db5, blocks[4], BLOCK_SIZE);
-			//sha256_168byte(data, blocks[1]);
-			//s->counter++;
-#endif
 			compress (&s->counter, blocks[1], blocks, 5);
 		}
 		for (size_t i = 1; i < n_blocks; i++) {
 			blocks[0] = blocks[1];
 			blocks[1] += BLOCK_SIZE;
-			blocks[2] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[3] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			blocks[4] = (sbuf + (BLOCK_SIZE * (*(buf++))));
-			// New sha256
-#if 0
-			block = (uint8_t**)blocks;
-			memcpy(data, &s->counter, 8);
-			memcpy(db1, *block++, BLOCK_SIZE);
-			memcpy(db2, *block++, BLOCK_SIZE);
-			memcpy(db3, *block++, BLOCK_SIZE);
-			memcpy(db4, *block++, BLOCK_SIZE);
-			memcpy(db5, *block++, BLOCK_SIZE);
-			//sha256_168byte(data, blocks[1]);
-			//s->counter++;
-#endif
+			blocks[2] = (sbuf + ((*(buf++))));
+			blocks[3] = (sbuf + ((*(buf++))));
+			blocks[4] = (sbuf + ((*(buf++))));
 			compress (&s->counter, blocks[1], blocks, 5);
 		}
 #ifdef TIMED

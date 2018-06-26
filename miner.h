@@ -284,6 +284,7 @@ struct thr_info {
 	pthread_attr_t attr;
 	struct thread_q	*q;
 	struct cpu_info cpu;
+	int gpuid;
 };
 
 struct work_restart {
@@ -326,6 +327,8 @@ extern double stratum_diff;
 extern double net_diff;
 extern double net_hashrate;
 extern uint32_t opt_cuda_syncmode;
+#define MAX_CUDA_DEVICES 32
+extern int8_t opt_cuda_devices[MAX_CUDA_DEVICES];
 
 #define JSON_RPC_LONGPOLL	(1 << 0)
 #define JSON_RPC_QUIET_404	(1 << 1)

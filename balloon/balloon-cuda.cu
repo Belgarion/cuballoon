@@ -151,10 +151,8 @@ void fill_prebuf(struct hash_state *s, int gpuid) {
 #endif
 }
 
-void reset_host_prebuf() {
-	for (int i = 0; i < 20; i++) {
-		host_prebuf_filled[i] = 0;
-	}
+void reset_host_prebuf(int gpuid) {
+	host_prebuf_filled[gpuid] = 0;
 }
 
 

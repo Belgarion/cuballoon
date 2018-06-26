@@ -392,8 +392,8 @@
     <None Include="asm\sha2-arm.S" />
     <CustomBuild Include="balloon\balloon-cuda.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc -arch=sm_52 -I "$(ProjectDir)/cudacommon/inc/" -I "$(ProjectDir)/compat\curl-for-windows\openssl\openssl\include" -dc %(Identity) -o "$(OutDir)/%(Filename).obj"
-nvcc -arch=sm_52 -dlink "$(OutDir)/%(Filename).obj" -o "$(OutDir)/%(Filename)-dlink.obj"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc -arch=sm_50 -I "$(ProjectDir)/cudacommon/inc/" -I "$(ProjectDir)/compat\curl-for-windows\openssl\openssl\include" -dc %(Identity) -o "$(OutDir)/%(Filename).obj"
+nvcc -arch=sm_50 -dlink "$(OutDir)/%(Filename).obj" -o "$(OutDir)/%(Filename)-dlink.obj"</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)/%(Filename).obj;$(OutDir)/%(Filename)-dlink.obj;%(Outputs)</Outputs>
       <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(AdditionalInputs)</AdditionalInputs>
     </CustomBuild>

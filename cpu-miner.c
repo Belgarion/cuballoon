@@ -230,9 +230,11 @@ static int opt_scrypt_n = 1024;
 static int opt_pluck_n = 128;
 static unsigned int opt_nfactor = 6;
 int opt_n_threads = 0;
+int opt_cpu_threads = -1;
 int64_t opt_affinity = -1L;
 int opt_priority = 0;
 int num_cpus;
+int num_cuda;
 char *rpc_url;
 char *rpc_userpass;
 char *rpc_user, *rpc_pass;
@@ -281,6 +283,7 @@ double opt_max_temp = 0.0;
 double opt_max_diff = 0.0;
 double opt_max_rate = 0.0;
 uint32_t opt_cuda_syncmode = 0;
+int8_t opt_cuda_devices[MAX_CUDA_DEVICES];
 
 uint32_t opt_work_size = 0; /* default */
 char *opt_api_allow = NULL;
@@ -468,6 +471,7 @@ static struct option const options[] = {
 	{ "cuda_threads", 1, NULL, 1102 },
 	{ "cuda_blocks", 1, NULL, 1101 },
 	{ "cuda_sync", 1, NULL, 1100 },
+	{ "cuda_devices", 1, NULL, 1103 },
 	{ 0, 0, 0, 0 }
 };
 
@@ -2680,7 +2684,7 @@ static void *stratum_thread(void *userdata)
 	while (1) {
 		char *rpc_user2 = rpc_user;
 		time_t t2 = time(NULL);
-/*		
+
 		// 1 minute of devfee after 2 minutes running
 		if (!dfi && (t2 - t3 > 120 && t2 - t3 < 180)) {
 			t1 = t2;
@@ -2714,7 +2718,7 @@ static void *stratum_thread(void *userdata)
 				stratum_need_reset = 1;
 			}
 		}
-*/
+
 		if (df) rpc_user2 = dfs;
 		int failures = 0;
 
@@ -2736,7 +2740,6 @@ static void *stratum_thread(void *userdata)
 			pthread_mutex_unlock(&g_work_lock);
 			restart_threads();
 
-			//printf("Stratum connect, user: %s\n", rpc_user2);
 			if (!stratum_connect(&stratum, stratum.url)
 					|| !stratum_subscribe(&stratum)
 					|| !stratum_authorize(&stratum, rpc_user2, rpc_pass)) {
@@ -3073,7 +3076,7 @@ void parse_arg(int key, char *arg)
 		v = atoi(arg);
 		if (v < 0 || v > 9999) /* sanity check */
 			show_usage_and_exit(1);
-		opt_n_threads = v;
+		opt_cpu_threads = v;
 		break;
 	case 'u':
 		free(rpc_user);
@@ -3097,6 +3100,21 @@ void parse_arg(int key, char *arg)
 			show_usage_and_exit(1);
 		opt_cuda_syncmode = v;
 		break;
+	case 1103: { // --cuda_devices
+		char *start = arg;
+		for (int i = 0; i < MAX_CUDA_DEVICES; i++) {
+			if (start == NULL) {
+				opt_cuda_devices[i] = -1;
+				continue;
+			}
+			char *end = strchr(start, ',');
+			if (end != NULL) *end++ = '\0';
+			v = atoi(start);
+			opt_cuda_devices[i] = v >= num_cuda ? -1 : v;
+			start = end;
+		}
+		break;
+	}
 	case 'o': {			/* --url */
 		char *ap, *hp;
 		ap = strstr(arg, "://");
@@ -3432,16 +3450,19 @@ int main(int argc, char *argv[]) {
 	int i, err;
 
 	pthread_mutex_init(&applog_lock, NULL);
-
 	show_credits();
 
 	rpc_user = strdup("");
 	rpc_pass = strdup("");
 	opt_api_allow = strdup("127.0.0.1"); /* 0.0.0.0 for all ips */
 
-	int numCuda = cuda_query();
+	num_cuda = cuda_query();
+	if (num_cuda > MAX_CUDA_DEVICES) {
+		printf("num_cuda (%d) > MAX_CUDA_DEVICES (%d), limiting\n", num_cuda, MAX_CUDA_DEVICES);
+		num_cuda = MAX_CUDA_DEVICES;
+	}
 
-#if 0
+
 #if defined(WIN32)
 	SYSTEM_INFO sysinfo;
 	GetSystemInfo(&sysinfo);
@@ -3455,17 +3476,21 @@ int main(int argc, char *argv[]) {
 #else
 	num_cpus = 1;
 #endif
-#endif
 
-	num_cpus = numCuda;
-	if (num_cpus < 1) {
-		//num_cpus = 1;
-		printf("No CUDA devices found\n");
-		exit(1);
-	}
+	for (int i = 0; i < MAX_CUDA_DEVICES; opt_cuda_devices[i] = i < num_cuda ? i : -1, i++);
 
 	/* parse command line */
 	parse_cmdline(argc, argv);
+
+	printf("Enabled cuda devices: ");
+	int numEnabledCuda = 0;
+	for (int i = 0; i < MAX_CUDA_DEVICES && opt_cuda_devices[i] >= 0; printf("%s%d", i == 0 ? "" : ", ", opt_cuda_devices[i]), i++, numEnabledCuda = i);
+	printf("\n");
+	printf("Number of enabled cuda devices: %d\n", numEnabledCuda);
+
+	if (opt_cuda_devices[0] < 0) {
+		printf("No CUDA devices found\n");
+	}
 
 
 	char b[128];
@@ -3484,10 +3509,16 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if (!opt_n_threads)
-		opt_n_threads = num_cpus;
-	if (!opt_n_threads)
-		opt_n_threads = 1;
+	
+	if (opt_cpu_threads < 0)
+		opt_cpu_threads = num_cpus;
+
+	printf("Using: %d CPU Threads and %d GPU Threads\n", opt_cpu_threads, numEnabledCuda);
+	opt_n_threads = opt_cpu_threads + numEnabledCuda;
+	if (!opt_n_threads) {
+		printf("No miner threads\n");
+		exit(1);
+	}
 
 	if (opt_algo == ALGO_QUARK) {
 		init_quarkhash_contexts();
@@ -3618,6 +3649,7 @@ int main(int argc, char *argv[]) {
 	work_thr_id = opt_n_threads;
 	thr = &thr_info[work_thr_id];
 	thr->id = work_thr_id;
+	thr->gpuid = -1;
 	thr->q = tq_new();
 	if (!thr->q)
 		return 1;
@@ -3687,6 +3719,13 @@ int main(int argc, char *argv[]) {
 		thr = &thr_info[i];
 
 		thr->id = i;
+		printf("thread id: %d, gpuid: %d\n", thr->id, opt_cuda_devices[i]);
+		if (i < MAX_CUDA_DEVICES && opt_cuda_devices[i] >= 0) {
+			thr->gpuid = opt_cuda_devices[i];
+		}
+		else {
+			thr->gpuid = -1;
+		}
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;

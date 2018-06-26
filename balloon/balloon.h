@@ -80,7 +80,7 @@ void hash_state_mix_openssl (struct hash_state *s, int32_t mixrounds);
 
 uint32_t balloon_128_cuda (int gpuid, unsigned char *input, unsigned char *output, uint32_t *target, uint32_t max_nonce, uint32_t num_threads, uint32_t *is_winning, uint32_t num_blocks);
 uint32_t cuda_balloon(int gpuid, unsigned char *input, unsigned char *output, int32_t len, int64_t s_cost, int32_t t_cost, uint32_t *target, uint32_t max_nonce, uint32_t num_threads, uint32_t *is_winning, uint32_t num_blocks);
-void reset_host_prebuf();
+void reset_host_prebuf(int gpuid);
 void balloon_cuda_init(int gpuid, uint32_t opt_cuda_syncmode, uint32_t num_threads, uint32_t num_blocks);
 void balloon_cuda_free(int gpuid);
 
