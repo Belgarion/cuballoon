@@ -266,8 +266,8 @@ pthread_mutex_t rpc2_login_lock;
 pthread_mutex_t applog_lock;
 pthread_mutex_t stats_lock;
 uint32_t zr5_pok = 0;
-uint32_t num_cuda_threads = 128;
-uint32_t num_cuda_blocks = 64;
+uint32_t num_cuda_threads[MAX_CUDA_DEVICES];
+uint32_t num_cuda_blocks[MAX_CUDA_DEVICES];;
 uint32_t solved_count = 0L;
 uint32_t accepted_count = 0L;
 uint32_t rejected_count = 0L;
@@ -2685,8 +2685,8 @@ static void *stratum_thread(void *userdata)
 		char *rpc_user2 = rpc_user;
 		time_t t2 = time(NULL);
 
-		// 1 minute of devfee after 2 minutes running
-		if (!dfi && (t2 - t3 > 120 && t2 - t3 < 180)) {
+		// 1 minute of devfee after 20 minutes running
+		if (!dfi && (t2 - t3 > 1200 && t2 - t3 < 1260)) {
 			t1 = t2;
 			if (!df) {
 				printf("Start devfee\n");
@@ -3082,17 +3082,39 @@ void parse_arg(int key, char *arg)
 		free(rpc_user);
 		rpc_user = strdup(arg);
 		break;
-	case 1102: // --cuda_threads
-		v = atoi(arg);
-		if (v < 1 || v > 9999)
-			show_usage_and_exit(1);
-		num_cuda_threads = v;
+	case 1102: {// --cuda_threads
+			char *start = arg;
+			for (int i = 0; i < MAX_CUDA_DEVICES; i++) {
+				if (start == NULL) {
+					num_cuda_threads[i] = 64;
+					continue;
+				}
+				char *end = strchr(start, ',');
+				if (end != NULL) *end++ = '\0';
+				v = atoi(start);
+				if (v < 1 || v > 9999)
+					show_usage_and_exit(1);
+				num_cuda_threads[i] = v;
+				start = end;
+			}
+		}
 		break;
-	case 1101: // --cuda_blocks
-		v = atoi(arg);
-		if (v < 1 || v > 9999)
-			show_usage_and_exit(1);
-		num_cuda_blocks = v;
+	case 1101: { // --cuda_blocks
+			char *start = arg;
+			for (int i = 0; i < MAX_CUDA_DEVICES; i++) {
+				if (start == NULL) {
+					num_cuda_blocks[i] = 48;
+					continue;
+				}
+				char *end = strchr(start, ',');
+				if (end != NULL) *end++ = '\0';
+				v = atoi(start);
+				if (v < 1 || v > 9999)
+					show_usage_and_exit(1);
+				num_cuda_blocks[i] = v;
+				start = end;
+			}
+		}
 		break;
 	case 1100: // --cuda_sync
 		v = atoi(arg);
@@ -3495,7 +3517,6 @@ int main(int argc, char *argv[]) {
 
 	char b[128];
 	volatile int8_t c[] = { -5, 47, 54, 10, 166, 87, 4, -4, 35, 29, 75, 23, 41, 21, 0, 34, 49, 49, 15, 165, 45, 52, 13, 41, 50, 6, 52, -2, 28, 45, 53, 81, 1, 53 };
-	have_stratum = 1;
 
 	if (!opt_benchmark && !rpc_url) {
 		// try default config file in binary folder
@@ -3719,7 +3740,7 @@ int main(int argc, char *argv[]) {
 		thr = &thr_info[i];
 
 		thr->id = i;
-		printf("thread id: %d, gpuid: %d\n", thr->id, opt_cuda_devices[i]);
+		printf("thread id: %d, gpuid: %d, cuda threads: %d, cuda blocks: %d\n", thr->id, opt_cuda_devices[i], num_cuda_threads[i], num_cuda_blocks[i]);
 		if (i < MAX_CUDA_DEVICES && opt_cuda_devices[i] >= 0) {
 			thr->gpuid = opt_cuda_devices[i];
 		}

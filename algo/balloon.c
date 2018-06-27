@@ -11,7 +11,7 @@
 //#define DEBUG
 //#define PRINT_ENDIANDATA
 uint32_t prev_pdata[20][10];
-int scanhash_balloon(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done, uint32_t num_cuda_threads, uint32_t num_cuda_blocks) {
+int scanhash_balloon(int thr_id, struct work *work, uint32_t max_nonce, uint64_t *hashes_done, uint32_t *num_cuda_threads, uint32_t *num_cuda_blocks) {
 	uint32_t _ALIGN(128) hash32[8];
 #ifdef DEBUG
 	uint32_t _ALIGN(128) orighash32[8];
@@ -51,7 +51,7 @@ int scanhash_balloon(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 		be32enc(&endiandata[i], pdata[i]);
 	};
 
-	if (is_gpu) balloon_cuda_init(thr_id, opt_cuda_syncmode, num_cuda_threads, num_cuda_blocks);
+	if (is_gpu) balloon_cuda_init(thr_id, opt_cuda_syncmode, num_cuda_threads[thr_id], num_cuda_blocks[thr_id]);
 	if (pdata_changed) {
 		balloon_reset();
 		if (is_gpu) reset_host_prebuf(gpuid);
@@ -61,7 +61,7 @@ int scanhash_balloon(int thr_id, struct work *work, uint32_t max_nonce, uint64_t
 
 		uint32_t is_winning = 1;
 		if (is_gpu) {
-			uint32_t winning_nonce = balloon_128_cuda(gpuid, (unsigned char *)endiandata, (unsigned char*)cudahash32, ptarget, max_nonce, num_cuda_threads, &is_winning, num_cuda_blocks);
+			uint32_t winning_nonce = balloon_128_cuda(gpuid, (unsigned char *)endiandata, (unsigned char*)cudahash32, ptarget, max_nonce, num_cuda_threads[thr_id], &is_winning, num_cuda_blocks[thr_id]);
 			be32enc(&endiandata[19], winning_nonce);
 			n = winning_nonce;
 			if (is_winning) {

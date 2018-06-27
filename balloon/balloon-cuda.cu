@@ -131,14 +131,14 @@ void fill_prebuf(struct hash_state *s, int gpuid) {
 		uint64_t *lebuf = host_prebuf_le[gpuid];
 		for (int i = 0; i < PREBUF_LEN; i+=8) {
 			//bytes_to_littleend8_uint64(buf, lebuf);
-        *lebuf <<= 8; *lebuf |= *(buf + 7);
-        *lebuf <<= 8; *lebuf |= *(buf + 6);
-        *lebuf <<= 8; *lebuf |= *(buf + 5);
-        *lebuf <<= 8; *lebuf |= *(buf + 4);
-        *lebuf <<= 8; *lebuf |= *(buf + 3);
-        *lebuf <<= 8; *lebuf |= *(buf + 2);
-        *lebuf <<= 8; *lebuf |= *(buf + 1);
-        *lebuf <<= 8; *lebuf |= *(buf + 0);
+			*lebuf <<= 8; *lebuf |= *(buf + 7);
+			*lebuf <<= 8; *lebuf |= *(buf + 6);
+			*lebuf <<= 8; *lebuf |= *(buf + 5);
+			*lebuf <<= 8; *lebuf |= *(buf + 4);
+			*lebuf <<= 8; *lebuf |= *(buf + 3);
+			*lebuf <<= 8; *lebuf |= *(buf + 2);
+			*lebuf <<= 8; *lebuf |= *(buf + 1);
+			*lebuf <<= 8; *lebuf |= *(buf + 0);
 			*lebuf %= 4096;
 			*lebuf <<= 5;
 			lebuf++;
